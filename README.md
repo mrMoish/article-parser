@@ -1,2 +1,12 @@
-# article-parser
-Web application that parses and extracts main article content from any website using HTML parsing
+# dependencies
+node_modules
+
+# logs
+npm-debug.log*
+
+# local environment
+env
+.env
+
+# OS
+.DS_Store

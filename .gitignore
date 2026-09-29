@@ -1,0 +1,58 @@
+const form = document.getElementById("parser-form");
+const input = document.getElementById("url-input");
+const status = document.getElementById("status");
+const result = document.getElementById("result");
+const titleElement = document.getElementById("article-title");
+const bodyElement = document.getElementById("article-body");
+const button = document.getElementById("submit-button");
+
+function setStatus(message, type = "") {
+  status.textContent = message;
+  status.className = "status";
+  if (type) {
+    status.classList.add(type);
+  }
+}
+
+function renderError(message) {
+  result.classList.remove("hidden");
+  titleElement.textContent = "Не удалось извлечь статью";
+  bodyElement.textContent = message;
+}
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const url = input.value.trim();
+  if (!url) {
+    setStatus("Введите URL сайта.", "error");
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Обработка...";
+  setStatus("Парсим страницу...");
+  result.classList.add("hidden");
+
+  try {
+    const response = await fetch(`/api/parse?url=${encodeURIComponent(url)}`);
+    const data = await response.json();
+
+    if (!data.ok) {
+      renderError(data.message || "Парсинг не получился.");
+      setStatus(data.message || "Парсинг не получился.", "error");
+      return;
+    }
+
+    titleElement.textContent = data.title || "Статья";
+    bodyElement.textContent = data.text || "Текст не найден.";
+    result.classList.remove("hidden");
+    setStatus("Готово! Статья успешно извлечена.", "success");
+  } catch (error) {
+    renderError("Парсинг не получился. Произошла ошибка при обращении к серверу.");
+    setStatus("Парсинг не получился.", "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Парсить";
+  }
+});
