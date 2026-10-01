@@ -32,6 +32,22 @@ function cleanText(text) {
 }
 
 function selectArticleRoot($) {
+  // Специфичные селекторы для популярных сайтов
+  const habrSelectors = [
+    "article.tm-article",
+    ".article-wrapper",
+    ".tm-article-body",
+    ".tm-article-snippet"
+  ];
+
+  for (const selector of habrSelectors) {
+    const candidate = $(selector).first();
+    if (candidate && candidate.length && candidate.text().length > 100) {
+      return candidate;
+    }
+  }
+
+  // Общие селекторы
   const selectors = [
     "article",
     "main",
@@ -41,8 +57,11 @@ function selectArticleRoot($) {
     ".entry-content",
     ".content",
     ".article-body",
+    ".article-text",
     ".story-body",
     ".news-content",
+    "[data-article]",
+    ".tm-article-presenter",
     "#content",
     "#main-content",
     ".main-article"
@@ -51,10 +70,14 @@ function selectArticleRoot($) {
   for (const selector of selectors) {
     const candidate = $(selector).first();
     if (candidate && candidate.length) {
-      return candidate;
+      const text = candidate.text();
+      if (text.length > 100) {
+        return candidate;
+      }
     }
   }
 
+  // Fallback на body если ничего не нашли
   const possible = [
     "body",
     "html"
@@ -70,31 +93,70 @@ function selectArticleRoot($) {
   return null;
 }
 
+function calculateNodeScore(node, $) {
+  const text = cleanText($(node).text());
+  const textLength = text.length;
+  
+  // Узлы с большим текстом получают более высокий score
+  let score = textLength;
+  
+  // Бонус за параграфы
+  if (node.name === 'p') score += 500;
+  if (node.name === 'h2' || node.name === 'h3') score += 200;
+  
+  // Штраф за навигацию и рекламу
+  const classList = ($(node).attr('class') || '').toLowerCase();
+  if (classList.includes('nav') || classList.includes('menu')) score -= 10000;
+  if (classList.includes('ad') || classList.includes('banner')) score -= 10000;
+  if (classList.includes('sidebar') || classList.includes('comment')) score -= 5000;
+  
+  return score;
+}
+
 function extractArticleText($, root) {
   const blocks = [];
-  const candidateNodes = root.find("p, li, h1, h2, h3, h4, h5, h6, blockquote");
+  
+  // Ищем все параграфы, списки, заголовки
+  const candidateNodes = root.find("p, li, h2, h3, h4, h5, h6, blockquote, .tm-article-snippet__content");
 
   candidateNodes.each((_, element) => {
     const text = cleanText($(element).text());
     if (!text) return;
 
     const length = text.length;
-    const tooShort = length < 20;
-    const likelyNav = /^(subscribe|cookie|login|signup|menu|search|share|related|comments|read more)$/i.test(text);
+    
+    // Фильтр по минимальной длине
+    if (length < 15) return;
+    
+    // Фильтр по навигационному тексту
+    const likelyNav = /^(читайте также|похожие статьи|подписаться|комментарии|загрузка|cookie|login|signup|меню|поиск|share|рекомендуем|обсудить)$/i.test(text);
+    if (likelyNav) return;
 
-    if (!tooShort && !likelyNav) {
-      blocks.push(text);
-    }
+    // Избегаем дубликатов
+    const isDuplicate = blocks.some(b => b.toLowerCase() === text.toLowerCase());
+    if (isDuplicate) return;
+
+    blocks.push(text);
   });
 
-  const uniqueText = [...new Set(blocks)]
-    .filter((value) => value.length > 30)
+  // Объединяем блоки с разделением на параграфы
+  const uniqueText = blocks
+    .filter((value) => value.length > 20)
     .join("\n\n");
 
-  if (uniqueText) return uniqueText;
+  if (uniqueText && uniqueText.length > 100) return uniqueText;
 
+  // Fallback: попробуем просто весь текст из корневого элемента
   const fallback = cleanText(root.text());
-  return fallback.length > 80 ? fallback : "";
+  
+  // Очищаем от типичного шума
+  const cleaned = fallback
+    .replace(/\s{2,}/g, "\n")
+    .split("\n")
+    .filter(line => line.length > 20 && !/(cookie|меню|навигация|cookie|подписка|комментарий)/i.test(line))
+    .join("\n");
+
+  return cleaned.length > 150 ? cleaned : "";
 }
 
 app.get("/api/parse", async (req, res) => {
@@ -111,9 +173,12 @@ app.get("/api/parse", async (req, res) => {
     const response = await fetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "ru-RU,ru;q=0.9",
+        "Cache-Control": "no-cache"
       },
-      redirect: "follow"
+      redirect: "follow",
+      timeout: 10000
     });
 
     if (!response.ok) {
@@ -123,40 +188,46 @@ app.get("/api/parse", async (req, res) => {
     const html = await response.text();
     const $ = cheerio.load(html);
 
+    // Получаем заголовок
     const title =
       $('meta[property="og:title"]').attr("content") ||
       $('meta[name="twitter:title"]').attr("content") ||
+      $('h1').first().text().trim() ||
       $("title").first().text().trim() ||
       "Статья";
 
+    // Выбираем корневой элемент статьи
     const root = selectArticleRoot($);
+    
     if (!root) {
       return res.json({
         ok: false,
         message: "Парсинг не получился. Не удалось найти основную статью на странице.",
-        title,
+        title: title.substring(0, 100),
         sourceUrl: url
       });
     }
 
+    // Извлекаем текст
     const articleText = extractArticleText($, root);
 
     if (!articleText || articleText.length < 80) {
       return res.json({
         ok: false,
         message: "Парсинг не получился. Страница не содержит читаемого текста статьи.",
-        title,
+        title: title.substring(0, 100),
         sourceUrl: url
       });
     }
 
     return res.json({
       ok: true,
-      title,
+      title: title.substring(0, 250),
       text: articleText,
       sourceUrl: url
     });
   } catch (error) {
+    console.error("Parse error:", error.message);
     return res.json({
       ok: false,
       message: "Парсинг не получился. Возможно, сайт блокирует загрузку или не поддерживает обычный HTML-доступ.",
