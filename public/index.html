@@ -4,38 +4,68 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Article Parser</title>
+    <meta
+      name="description"
+      content="Парсер статей по URL. Вставьте ссылку и извлеките основной текст статьи."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <div class="aurora aurora-one"></div>
+    <div class="aurora aurora-two"></div>
+
     <div class="page-shell">
-      <div class="panel">
-        <div class="panel-header">
-          <span class="badge">HTML Parser</span>
-          <h1>Article Parser</h1>
+      <header class="topbar">
+        <div class="brand-wrap">
+          <div class="brand-mark">A</div>
+          <span class="brand-name">Article Parser</span>
         </div>
+        <span class="micro-badge">HTML extraction</span>
+      </header>
 
-        <form id="parser-form" class="form">
-          <label for="url-input" class="label">URL сайта</label>
-          <div class="input-row">
-            <input
-              id="url-input"
-              name="url"
-              type="url"
-              placeholder="https://example.com"
-              autocomplete="off"
-              required
-            />
-            <button type="submit" id="submit-button">Парсить</button>
+      <main class="app-card">
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">Article intelligence</p>
+            <h1>Extract the article behind the URL.</h1>
+            <p class="subtitle">
+              Paste a website link and pull out the main readable content — or get a clear
+              “Парсинг не получился” result when the page isn’t suitable.
+            </p>
           </div>
-        </form>
 
-        <div id="status" class="status" aria-live="polite"></div>
+          <form id="parser-form" class="parser-form">
+            <label for="url-input" class="label">URL сайта</label>
 
-        <div id="result" class="result hidden">
+            <div class="input-row">
+              <span class="input-icon" aria-hidden="true">🔗</span>
+              <input
+                id="url-input"
+                name="url"
+                type="url"
+                placeholder="https://example.com"
+                autocomplete="off"
+                required
+              />
+              <button type="submit" id="submit-button">Парсить</button>
+            </div>
+          </form>
+
+          <div id="status" class="status" aria-live="polite"></div>
+        </section>
+
+        <section id="result" class="result hidden" aria-live="polite">
+          <div class="result-topline">Result</div>
           <h2 id="article-title">Статья</h2>
           <div id="article-body" class="article-body"></div>
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
 
     <script src="/app.js"></script>
